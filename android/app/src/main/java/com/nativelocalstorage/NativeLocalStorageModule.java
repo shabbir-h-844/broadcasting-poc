@@ -38,9 +38,6 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
 
 
     private ProtcoBleManager protcoBleManager;
-    private BluetoothLeAdvertiser advertiser;
-    private AdvertisingSetCallback advertisingCallback;
-
     private static final String TAG = "NativeLocalStorage";
     private static final String TAG2 = "Protco Broadcaster";
 
@@ -60,14 +57,7 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
     public void startAdvertising(Promise promise) {
         try {
             Log.d(TAG2, "Starting broadcasting");
-
             protcoBleManager = ProtcoBleManager.getProtcoBleManager();
-
-            advertiser = protcoBleManager.getAdvertiser();
-            if (advertiser == null) {
-                promise.reject("ADVERTISING_UNSUPPORTED", "Bluetooth LE advertising not supported");
-                return;
-            }
             AdvertisingSetParameters parameters = getAdvertisingSetParameters();
             // Manufacturer Specific Data
             int manufacturerId = 0x5450; //change id as wanted
@@ -80,11 +70,10 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
                     .addManufacturerData(manufacturerId, manufacturerData)
                     .build();
             
-            advertisingCallback = protcoBleManager.getAdvertisingCallback();
             if (ActivityCompat.checkSelfPermission(this.getReactApplicationContext(), Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
                 return;
             }
-            advertiser.startAdvertisingSet(parameters, data, null, null, null, advertisingCallback);
+            protcoBleManager.startAdvertisingSet(parameters, data, null, null, null, protcoBleManager.getAdvertisingCallback());
             Log.e(TAG2, "Method called -> startAdvertisingSet ");
             promise.resolve(true);
         } catch (Exception e) {
@@ -95,65 +84,44 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
 
     private static AdvertisingSetParameters getAdvertisingSetParameters() {
         AdvertisingSetParameters parameters = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            parameters = new AdvertisingSetParameters.Builder()
-                    .setLegacyMode(false)
-                    .setConnectable(false) // You only need to broadcast data && You don't need two-way communication.
-                    .setInterval(AdvertisingSetParameters.INTERVAL_LOW)//  your device will advertise very frequently && making it easier and faster for other devices to discover it.
-                    .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
-
-                    .build();
-        }
+        parameters = new AdvertisingSetParameters.Builder()
+                .setLegacyMode(false)
+                .setConnectable(false) // You only need to broadcast data && You don't need two-way communication.
+                .setInterval(AdvertisingSetParameters.INTERVAL_LOW)//  your device will advertise very frequently && making it easier and faster for other devices to discover it.
+                .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_MEDIUM)
+                .build();
         return parameters;
     }
 
     @ReactMethod
     public void stopAdvertising(Promise promise) {
-        promise.resolve(true);
-        if (advertiser != null && advertisingCallback != null
-                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            if (ActivityCompat.checkSelfPermission(this.getReactApplicationContext(), Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
-                return;
-            }
-            advertiser.stopAdvertisingSet(advertisingCallback);
-            Log.i(TAG, "Advertising stopped successfully");
-        } else {
-            Log.e(TAG, "Cannot stop advertising, advertiser or callback is null");
+        if (ActivityCompat.checkSelfPermission(this.getReactApplicationContext(), Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
+            return;
         }
+        protcoBleManager.stopAdvertisingSet();
+        promise.resolve(true);
+        Log.i(TAG, "Advertising stopped successfully");
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.O)
     @ReactMethod
     public void updateAdvertisingData(boolean turnOn, Promise promise) {
         AdvertisingSet  currentAdvertisingSet = protcoBleManager.getCurrentAdvertisingSet();
-        if (currentAdvertisingSet == null) {
-            Log.e(TAG2, "Error: No active advertising set to update.");
-            promise.reject("NO_ADVERTISING", "No active advertising set to update.");
-            return;
-        }
-
         try {
             //  (ON or OFF) toggling
             String hexData = turnOn ? "A39501FFA5AF00000101" : "A39501FF6E7800000102";
             byte[] manufacturerData = hexStringToByteArray(hexData);
-
             AdvertiseData newData = new AdvertiseData.Builder()
                     .setIncludeDeviceName(true)
                     .addManufacturerData(0x5450, manufacturerData)
                     .build();
-
             //  Advertise Permission
             if (ActivityCompat.checkSelfPermission(this.getReactApplicationContext(), Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
                 Log.e(TAG2, "Bluetooth Advertise Permission Not Granted");
                 promise.reject("PERMISSION_DENIED", "BLUETOOTH_ADVERTISE permission not granted.");
                 return;
             }
-
-
             currentAdvertisingSet.setAdvertisingData(newData);
             Log.i(TAG2, "Successfully updated Advertising Data to " + (turnOn ? "ON" : "OFF"));
-
             promise.resolve(true);
         } catch (IllegalStateException e) {
             Log.e(TAG2, "Advertising data update failed: " + e.getMessage());

@@ -2,9 +2,12 @@ package com.nativelocalstorage;
 
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertisingSet;
 import android.bluetooth.le.AdvertisingSetCallback;
+import android.bluetooth.le.AdvertisingSetParameters;
 import android.bluetooth.le.BluetoothLeAdvertiser;
+import android.bluetooth.le.PeriodicAdvertisingParameters;
 import android.util.Log;
 
 public class ProtcoBleManager {
@@ -16,11 +19,13 @@ public class ProtcoBleManager {
     private AdvertisingSet currentAdvertisingSet;
     private static final String TAG2 = "Protco Broadcaster";
 
-    @SuppressLint("NewApi")
     private ProtcoBleManager(){
         adapter = BluetoothAdapter.getDefaultAdapter();
         if (!adapter.isLeExtendedAdvertisingSupported()) {
             adapter = null;
+        }
+        if(adapter!=null){
+            getAdvertiser();
         }
     }
     public static ProtcoBleManager getProtcoBleManager() {
@@ -40,7 +45,6 @@ public class ProtcoBleManager {
         return advertiser;
     }
 
-    @SuppressLint("NewApi")
     public AdvertisingSetCallback getAdvertisingCallback() {
         if(advertisingCallback == null){
             advertisingCallback = new AdvertisingSetCallback() {
@@ -68,5 +72,18 @@ public class ProtcoBleManager {
 
     public AdvertisingSet getCurrentAdvertisingSet() {
         return currentAdvertisingSet;
+    }
+
+    public void startAdvertisingSet(AdvertisingSetParameters parameters, AdvertiseData advertiseData, AdvertiseData scanResponse, PeriodicAdvertisingParameters periodicParameters, AdvertiseData periodicData, AdvertisingSetCallback callback){
+        if (advertiser != null) {
+            advertiser.startAdvertisingSet(parameters, advertiseData, scanResponse, periodicParameters, periodicData, callback);
+
+        }
+    }
+
+    public  void stopAdvertisingSet(){
+        if (advertiser != null) {
+            advertiser.stopAdvertisingSet(advertisingCallback);
+        }
     }
 }
