@@ -37,8 +37,8 @@ import java.util.UUID;
 public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
 
 
+    private ProtcoBleManager protcoBleManager;
     private BluetoothLeAdvertiser advertiser;
-    private AdvertisingSet currentAdvertisingSet;//.....
     private AdvertisingSetCallback advertisingCallback;
 
     private static final String TAG = "NativeLocalStorage";
@@ -60,36 +60,15 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
     public void startAdvertising(Promise promise) {
         try {
             Log.d(TAG2, "Starting broadcasting");
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter(); //BluetoothAdapter is your primary way to interact with Bluetooth functionality on Android, if the device doesn't have Bluetooth  it will  return null.
 
-            if (adapter == null) {
-                promise.reject("BLUETOOTH_UNAVAILABLE", "Bluetooth adapter not available");
-                return;
-            }
+            protcoBleManager = ProtcoBleManager.getProtcoBleManager();
 
-            // checking condition that not all Bluetooth-enabled devices support BLE advertising.
-            // Some devices might only support classic Bluetooth or BLE scanning but not advertising.
-
-            advertiser = adapter.getBluetoothLeAdvertiser();
+            advertiser = protcoBleManager.getAdvertiser();
             if (advertiser == null) {
                 promise.reject("ADVERTISING_UNSUPPORTED", "Bluetooth LE advertising not supported");
                 return;
             }
-
-            //The 2M PHY is a feature that allows for higher data transfer speeds (2 Mbps) compared to the original 1M PHY (1 Mbps)
-            //introduced in Bluetooth 5-> large amount data, && for for periodic advertising and other advanced advertising features.
-            if (!adapter.isLeExtendedAdvertisingSupported()) {
-                promise.reject("EXTENDED_ADVERTISING_UNSUPPORTED", "Extended Advertising not supported!");
-                return;
-            }
-
-
-            int maxDataLength = 0;
-            maxDataLength = adapter.getLeMaximumAdvertisingDataLength();// This length includes all data in the advertisement, such as flags, manufacturer data, service UUIDs, service data,
-            Log.i(TAG, "Max advertising data length: " + maxDataLength);
-
             AdvertisingSetParameters parameters = getAdvertisingSetParameters();
-
             // Manufacturer Specific Data
             int manufacturerId = 0x5450; //change id as wanted
             String hexData = "A39501FFA5AF00000101"; // change data required ;
@@ -101,37 +80,13 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
                     .addManufacturerData(manufacturerId, manufacturerData)
                     .build();
             
-              advertisingCallback = new AdvertisingSetCallback() {
-                @Override
-                public void onAdvertisingSetStarted(AdvertisingSet advertisingSet, int txPower, int status) {
-                    Log.i(TAG2, "Advertising started: txPower=" + txPower + ", status=" + status);
-                    Log.i(TAG2, "Protco Broadcasting Started: txPower=" + data.toString());
-
-                    if (status == AdvertisingSetCallback.ADVERTISE_SUCCESS) {
-                        currentAdvertisingSet = advertisingSet;
-                        Log.i(TAG2, "Manufacture Data passed succesfuuly");
-                        promise.resolve(null);
-
-
-                    } else {
-                        promise.reject("ADVERTISING_START_FAILED", "Advertising start failed: " + status);
-                        Log.e(TAG2, "Advertising start failed: " + status);
-                    }
-                }
-
-                @Override
-                public void onAdvertisingSetStopped(AdvertisingSet advertisingSet) {
-                    Log.i(TAG2, "Advertising stopped");
-                    currentAdvertisingSet = null;
-                }
-
-            };
+            advertisingCallback = protcoBleManager.getAdvertisingCallback();
             if (ActivityCompat.checkSelfPermission(this.getReactApplicationContext(), Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
                 return;
             }
             advertiser.startAdvertisingSet(parameters, data, null, null, null, advertisingCallback);
             Log.e(TAG2, "Method called -> startAdvertisingSet ");
-
+            promise.resolve(true);
         } catch (Exception e) {
             promise.reject("ERROR", "Error starting advertising: " + e.getMessage());
             Log.e(TAG, "Error in startAdvertising", e);
@@ -162,7 +117,6 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
                 return;
             }
             advertiser.stopAdvertisingSet(advertisingCallback);
-            currentAdvertisingSet = null;
             Log.i(TAG, "Advertising stopped successfully");
         } else {
             Log.e(TAG, "Cannot stop advertising, advertiser or callback is null");
@@ -172,6 +126,7 @@ public class NativeLocalStorageModule extends ReactContextBaseJavaModule {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @ReactMethod
     public void updateAdvertisingData(boolean turnOn, Promise promise) {
+        AdvertisingSet  currentAdvertisingSet = protcoBleManager.getCurrentAdvertisingSet();
         if (currentAdvertisingSet == null) {
             Log.e(TAG2, "Error: No active advertising set to update.");
             promise.reject("NO_ADVERTISING", "No active advertising set to update.");
